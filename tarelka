@@ -1,0 +1,42 @@
+#!/usr/bin/env lua
+
+Yaml = require('yaml')
+
+function GetOutputOfCMD(command)
+  local handle = assert(io.popen(command))
+  local ret = assert(handle:read("a"))
+  assert(handle:close())
+  ret = string.gsub(ret, '^%s+', '')
+  ret = string.gsub(ret, '%s+$', '')
+  ret = string.gsub(ret, '[\n\r]+', ' ')
+  return ret
+end
+
+function CheckIfRoot()
+  return assert(GetOutputOfCMD("id -u")) == "0"
+end
+
+function MustNotBeRoot(f)
+  return function(...)
+    assert(not CheckIfRoot(), "DONT RUN THIS AS ROOT!!!")
+    return f(...)
+  end
+end
+
+function GetConfig(path)
+  local handle = assert(io.open(path))
+  local text = assert(handle:read("a"))
+  assert(handle:close())
+  return Yaml.eval(text)
+end
+
+function Main()
+  local HOME = os.getenv("HOME")
+  local config_path = HOME.."/.config/tarelka/tarelka.yaml"
+  local config = GetConfig(config_path)
+  print(config["docker-port"])
+end
+
+Main = MustNotBeRoot(Main)
+
+Main()
