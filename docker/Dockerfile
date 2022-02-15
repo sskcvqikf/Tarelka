@@ -2,7 +2,7 @@ FROM archlinux:latest
 
 RUN	pacman -Syyu --noconfirm \ 
     pkgconf make git cmake clang gcc \
-    gdb neovim lldb openssh valgrind
+    gdb neovim lldb openssh valgrind tmux
 
 ENV CXX="/usr/bin/clang++"
 ENV CC="/usr/bin/clang"
@@ -13,4 +13,5 @@ RUN useradd -u 1234 -g 1234 -m tarelka && yes tarelka | passwd tarelka >/dev/nul
 EXPOSE 22
 RUN echo "StrictHostKeyChecking=no" >> /etc/ssh/ssh_config
 RUN mkdir /var/run/sshd 
+RUN /usr/bin/ssh-keygen -A
 CMD ["/usr/sbin/sshd", "-D"]
