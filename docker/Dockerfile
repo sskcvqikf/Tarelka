@@ -2,7 +2,8 @@ FROM archlinux:latest
 
 RUN	pacman -Syyu --noconfirm \ 
     pkgconf make git cmake clang gcc \
-    gdb neovim lldb openssh valgrind tmux
+    gdb neovim lldb openssh valgrind tmux \
+    rsync
 
 ENV CXX="/usr/bin/clang++"
 ENV CC="/usr/bin/clang"

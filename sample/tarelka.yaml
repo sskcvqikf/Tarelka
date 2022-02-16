@@ -2,4 +2,5 @@
   container-name: archlinux_workspace
   docker-port: 22
   host-port: 2222
-  local-dir-path: $HOME
+  local-dir-path: /local/path/to/map/to/container
+  shell: tmux

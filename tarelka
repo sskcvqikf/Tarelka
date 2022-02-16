@@ -2,7 +2,7 @@
 
 Yaml = require('yaml')
 
-function GetOutputOfCMD(command)
+function GetOutputOfShellCommand(command)
   local handle = assert(io.popen(command))
   local ret = assert(handle:read("a"))
   assert(handle:close())
@@ -17,7 +17,7 @@ function RunShellCommand(command)
 end
 
 function CheckIfRoot()
-  return assert(GetOutputOfCMD("id -u")) == "0"
+  return assert(GetOutputOfShellCommand("id -u")) == "0"
 end
 
 function MustNotBeRoot(f)
@@ -112,9 +112,8 @@ COMMANDS_MAP =
   install = COMMANDS.INSTALL
 }
 
-
 function GetCommand(command)
-  return assert(COMMANDS_MAP[command])
+  return assert(COMMANDS_MAP[command], "Command " .. command " not found")
 end
 
 function GetCommandArguments(args)
@@ -128,7 +127,7 @@ function Main()
   local config = GetConfig(config_path)
 
   local command = arg[1]
-  local handler = assert(COMMANDS_MAP[command], command .. " is not valid command")
+  local handler = COMMANDS_MAP[command]
 
   local args = GetCommandArguments(arg)
 
