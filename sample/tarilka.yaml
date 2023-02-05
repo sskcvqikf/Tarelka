@@ -1,0 +1,12 @@
+arch:
+  docker-port: 22
+  host-port: 2221
+  local-dir-path: /local/path/to/map/to/container
+  shell: sh
+
+bubuntu:
+  docker-port: 22
+  host-port: 2222
+  local-dir-path: /local/path/to/map/to/container
+  shell: sh 
+

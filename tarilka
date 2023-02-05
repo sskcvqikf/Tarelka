@@ -27,11 +27,13 @@ function MustNotBeRoot(f)
   end
 end
 
-function GetConfig(path)
+function GetConfig(path, env)
   local handle = assert(io.open(path))
   local text = assert(handle:read("a"))
   assert(handle:close())
-  return Yaml.eval(text)
+  local conf = Yaml.eval(text)
+  local ret = assert(conf[env], "Config not found for given environment")
+  return ret
 end
 
 function CreateImage(name, path_to_dockerfile)
@@ -41,7 +43,7 @@ end
 
 function RunContainer(name, local_dir_path, host_port, docker_port)
   local command = "docker run -d --mount type=bind,source=" ..
-                  local_dir_path .. ",target=/home/tarelka/workspace" ..
+                  local_dir_path .. ",target=/home/tarilka/workspace" ..
                   " --cap-add sys_ptrace -p" .. host_port .. ":" .. docker_port ..
                   " --name " .. name .. " " .. name
   local _ = assert(RunShellCommand(command))
@@ -52,46 +54,31 @@ function StopContainer(name)
   local _ = assert(RunShellCommand(command))
 end
 
-function InstallPackages(name, packages)
-  local command = "docker exec -it " .. name ..
-                  " pacman -Syyu " .. table.concat(packages, " ")
-  local _ = assert(RunShellCommand(command))
-end
-
 function LoginToContainer(name, shell)
   local command = "docker exec -it " .. name .. " " .. shell
   local _ = assert(RunShellCommand(command))
 end
 
-function HandleBuild(args, config)
-  local path_to_dockerfile = assert(args[1], "You have to provide path to Dockerfile")
-  local container_name = assert(config["container-name"], "Must be specified in config")
-  return CreateImage(container_name, path_to_dockerfile)
+function HandleBuild(env, _, _)
+  local HOME = os.getenv("HOME")
+  local path_to_dockerfile = HOME .. "/.config/tarilka/docker/" .. env
+  return CreateImage(env, path_to_dockerfile)
 end
 
-function HandleStart(_, config)
+function HandleStart(env, _, config)
   local host_port = assert(config["host-port"], "Must be specified in config")
   local docker_port = assert(config["docker-port"], "Must be specified in config")
   local local_dir_path = assert(config["local-dir-path"], "Must be specified in config")
-  local container_name = assert(config["container-name"], "Must be specified in config")
-  return RunContainer(container_name, local_dir_path, host_port, docker_port)
+  return RunContainer(env, local_dir_path, host_port, docker_port)
 end
 
-function HandleStop(_, config)
-  local container_name = assert(config["container-name"], "Must be specified in config")
-  return StopContainer(container_name)
+function HandleStop(env, _, _)
+  return StopContainer(env)
 end
 
-function HandleInstall(args, config)
-  local container_name = assert(config["container-name"], "Must be specified in config")
-  local packages = args
-  return InstallPackages(container_name, packages)
-end
-
-function HandleLogin(_, config)
-  local container_name = assert(config["container-name"], "Must be specified in config")
+function HandleLogin(env, _, config)
   local shell = assert(config["shell"], "Must be specified in config")
-  return LoginToContainer(container_name, shell)
+  return LoginToContainer(env, shell)
 end
 
 COMMANDS =
@@ -117,21 +104,27 @@ function GetCommand(command)
 end
 
 function GetCommandArguments(args)
-  local ret = {table.unpack(args, 2)}
+  local ret = {table.unpack(args, 3)}
   return ret
 end
 
-function Main()
-  local HOME = os.getenv("HOME")
-  local config_path = HOME.."/.config/tarelka/tarelka.yaml"
-  local config = GetConfig(config_path)
+function GetRequiredArgs(args)
+  local command = assert(args[1], "You MUST provide a command name")
+  local env = assert(args[2], "You MUST provide an environment name")
+  return command, env
+end
 
-  local command = arg[1]
-  local handler = COMMANDS_MAP[command]
+function Main()
+  local command, env = GetRequiredArgs(arg)
+
+  local HOME = os.getenv("HOME")
+  local config_path = HOME .. "/.config/tarilka/tarilka.yaml"
+  local config = GetConfig(config_path, env)
 
   local args = GetCommandArguments(arg)
+  local handler = COMMANDS_MAP[command]
 
-  handler(args, config)
+  handler(env, args, config)
 end
 
 Main = MustNotBeRoot(Main)
