@@ -2,6 +2,18 @@
 
 Yaml = require('yaml')
 
+HOME = os.getenv("HOME")
+CONFIG_ROOT = HOME .. "/.config/tarilka"
+
+function SplitMappings(full_mapping)
+  local ret = {}
+  for s in string.gmatch(full_mapping, "([^:]+)") do
+    table.insert(ret, s)
+  end
+  assert(#ret == 2, "Mapping " .. full_mapping .. " is invalid")
+  return ret
+end
+
 function GetOutputOfShellCommand(command)
   local handle = assert(io.popen(command))
   local ret = assert(handle:read("a"))
@@ -41,16 +53,22 @@ function CreateImage(name, path_to_dockerfile)
   local _ = assert(RunShellCommand(command))
 end
 
-function RunContainer(name, local_dir_path, host_port, docker_port)
-  local command = "docker run -d --mount type=bind,source=" ..
-                  local_dir_path .. ",target=/home/tarilka/workspace" ..
-                  " --cap-add sys_ptrace -p" .. host_port .. ":" .. docker_port ..
+function RunContainer(name, host_port, docker_port, mappings)
+  local mount_string = ""
+  for _, mapping in ipairs(mappings) do
+    mount_string = mount_string .. " --mount type=bind,source=" .. mapping[1] .. ",target=" .. mapping[2]
+  end
+
+  local port_string = " -p" .. host_port .. ":" .. docker_port
+
+  local command = "docker run -d --rm" .. mount_string ..
+                  " --cap-add sys_ptrace" .. port_string ..
                   " --name " .. name .. " " .. name
   local _ = assert(RunShellCommand(command))
 end
 
 function StopContainer(name)
-  local command = "docker stop " .. name .. " && docker rm $_"
+  local command = "docker stop " .. name
   local _ = assert(RunShellCommand(command))
 end
 
@@ -60,16 +78,19 @@ function LoginToContainer(name, shell)
 end
 
 function HandleBuild(env, _, _)
-  local HOME = os.getenv("HOME")
-  local path_to_dockerfile = HOME .. "/.config/tarilka/docker/" .. env
+  local path_to_dockerfile = CONFIG_ROOT .. "/docker/" .. env
   return CreateImage(env, path_to_dockerfile)
 end
 
 function HandleStart(env, _, config)
   local host_port = assert(config["host-port"], "Must be specified in config")
   local docker_port = assert(config["docker-port"], "Must be specified in config")
-  local local_dir_path = assert(config["local-dir-path"], "Must be specified in config")
-  return RunContainer(env, local_dir_path, host_port, docker_port)
+  local raw_mappings = config["directory-mappings"]
+  local mappings = {}
+  for _, raw_mapping in ipairs(raw_mappings) do
+    table.insert(mappings, SplitMappings(raw_mapping))
+  end
+  return RunContainer(env, host_port, docker_port, mappings)
 end
 
 function HandleStop(env, _, _)
@@ -115,8 +136,7 @@ end
 function Main()
   local command, env = GetRequiredArgs(arg)
 
-  local HOME = os.getenv("HOME")
-  local config_path = HOME .. "/.config/tarilka/tarilka.yaml"
+  local config_path = CONFIG_ROOT .. "/tarilka.yaml"
   local config = GetConfig(config_path, env)
 
   local args = GetCommandArguments(arg)
