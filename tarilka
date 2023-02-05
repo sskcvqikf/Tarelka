@@ -87,7 +87,6 @@ COMMANDS =
   START = HandleStart,
   STOP = HandleStop,
   LOGIN = HandleLogin,
-  INSTALL = HandleInstall
 }
 
 COMMANDS_MAP =
@@ -96,7 +95,6 @@ COMMANDS_MAP =
   start = COMMANDS.START,
   stop = COMMANDS.STOP,
   login = COMMANDS.LOGIN,
-  install = COMMANDS.INSTALL
 }
 
 function GetCommand(command)
