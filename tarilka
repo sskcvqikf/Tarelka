@@ -1,7 +1,7 @@
 #!/usr/bin/env lua
 
 Yaml = require('yaml')
-
+local Lfs = require("lfs")
 HOME = os.getenv("HOME")
 CONFIG_ROOT = HOME .. "/.config/tarilka"
 
@@ -25,7 +25,11 @@ function GetOutputOfShellCommand(command)
 end
 
 function RunShellCommand(command)
-  return os.execute(command)
+  local success, error_message, error_code = os.execute(command)
+  if success == nil then
+    print("Error runnning '" .. command .. "'. Code: " .. tostring(error_code) .. ". Message: '" .. error_message .. "'")
+  end
+  return success
 end
 
 function CheckIfRoot()
@@ -48,8 +52,46 @@ function GetConfig(path, env)
   return ret
 end
 
+
+function CommitsExist(path)
+    for file in Lfs.dir(path) do
+        if file:match("commit.*") then
+            return true
+        end
+    end
+    return false
+end
+
+
+function GetLatestFileWithTimestamp(path)
+    local latestFile = nil
+    local latestTimestamp = 0
+
+    for file in Lfs.dir(path) do
+        local timestamp = file:match("commit.(%d+)")
+        if timestamp then
+            timestamp = tonumber(timestamp)
+            if timestamp > latestTimestamp then
+                latestTimestamp = timestamp
+                latestFile = file
+            end
+        end
+    end
+
+    return path .. "/" .. latestFile
+end
+
+--------------------------------------
+---------------- LOGIC ---------------
+--------------------------------------
+
 function CreateImage(name, path_to_dockerfile)
   local command = "docker build -t " .. name .. " " .. path_to_dockerfile
+  local _ = assert(RunShellCommand(command))
+end
+
+function LoadImageFromCommitAndReplace(_, path_to_commit)
+  local command = "docker load < " .. path_to_commit
   local _ = assert(RunShellCommand(command))
 end
 
@@ -77,6 +119,22 @@ function LoginToContainer(name, shell)
   local _ = assert(RunShellCommand(command))
 end
 
+function CommitContainer(name, path_to_dir)
+  local commit_path = path_to_dir .. "/commits"
+
+  local commit_command = "docker commit " .. name .. " " .. name
+  local mkdir_command = "mkdir -p " .. commit_path
+  local save_command = "docker save " .. name .. " > " .. commit_path .. "/commit." .. tostring(os.time())
+
+  local _ = assert(RunShellCommand(commit_command))
+  local _ = assert(RunShellCommand(mkdir_command))
+  local _ = assert(RunShellCommand(save_command))
+end
+
+--------------------------------------
+-------------- HANDLERS --------------
+--------------------------------------
+
 function HandleBuild(env, _, _)
   local path_to_dockerfile = CONFIG_ROOT .. "/docker/" .. env
   return CreateImage(env, path_to_dockerfile)
@@ -90,6 +148,13 @@ function HandleStart(env, _, config)
   for _, raw_mapping in ipairs(raw_mappings) do
     table.insert(mappings, SplitMappings(raw_mapping))
   end
+
+  local commits_path = CONFIG_ROOT .. "/docker/" .. env .. "/commits"
+  if CommitsExist(commits_path) then
+    local commit_path = GetLatestFileWithTimestamp(commits_path)
+    LoadImageFromCommitAndReplace(env, commit_path)
+  end
+
   return RunContainer(env, host_port, docker_port, mappings)
 end
 
@@ -102,11 +167,17 @@ function HandleLogin(env, _, config)
   return LoginToContainer(env, shell)
 end
 
+function HandleCommit(env, _, _)
+  local path_to_dockerfile = CONFIG_ROOT .. "/docker/" .. env
+  return CommitContainer(env, path_to_dockerfile)
+end
+
 COMMANDS =
 {
   BUILD = HandleBuild,
   START = HandleStart,
   STOP = HandleStop,
+  COMMIT = HandleCommit,
   LOGIN = HandleLogin,
 }
 
@@ -115,6 +186,7 @@ COMMANDS_MAP =
   build = COMMANDS.BUILD,
   start = COMMANDS.START,
   stop = COMMANDS.STOP,
+  commit = COMMANDS.COMMIT,
   login = COMMANDS.LOGIN,
 }
 
